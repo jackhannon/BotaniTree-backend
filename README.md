@@ -1,6 +1,8 @@
 # BotaniTree-backend
 The backend for BotaniTree, the visualization tool that allows users to keep track of, and visualize the complex familial relationships of a specific plant species individuals using pedigrees.
 
+The frontend code for the demo version of this application is available [here](https://github.com/jackhannon/BotaniTree-demo).
+
 ## Tech Stack
 Built with:
  - Postgres

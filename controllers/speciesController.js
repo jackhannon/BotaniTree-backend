@@ -5,7 +5,8 @@ const { JSDOM } = require('jsdom');
 const deleteFolderAndContents = require("../utils/deleteFolderAndContents");
 const isJsonString = require("../utils/isJsonString");
 const generateIndividualName = require("../utils/generateIndividualName");
-const { convertToSeconds, convertToPostgresTimestamp } = require("../utils/convertToPostgresTimestamp");
+const { convertToPostgresTimestamp } = require("../utils/convertToPostgresTimestamp");
+const { AppError } = require("../middleware/appErr");
 const window = new JSDOM('').window;
 const DOMPurify = createDOMPurify(window);
 const SECONDS_IN_A_YEAR = 31536000;
@@ -16,7 +17,7 @@ const getSpecies = tryCatch(async function(req, res, next) {
                             ORDER BY date DESC`;
 
   const result = await makeQuery(GET_ALL_SPECIES)
-  return res.json(result.rows).status(200)
+  return res.status(200).json(result.rows)
 })
 
 
@@ -24,10 +25,11 @@ const getSpecies = tryCatch(async function(req, res, next) {
 const getSpecificSpeciesInfo = tryCatch(async function(req, res, next) {
   const GET_SPECIES = `SELECT *
                         FROM species
-                        WHERE id = $1`;
-
+                        WHERE id = $1
+`;
+  
   const speciesResult = await makeQuery(GET_SPECIES, req.params.speciesId)
-  res.json(speciesResult.rows[0]).status(200)
+  res.status(speciesResult.rows[0] ? 200 : 404).json(speciesResult.rows[0])
 })
 
 
@@ -105,7 +107,7 @@ const getIndividualInfo = tryCatch(async function(req, res, next) {
       const groupAndSpeciesDefaultsResult = await makeQuery(GET_NEW_INDIVIDUAL_DEFAULTS_GROUP_AND_SPECIES, req.params.groupId)
       const generatedName = generateIndividualName(groupAndSpeciesDefaultsResult.rows[0].species_name, Number(groupAndSpeciesDefaultsResult.rows[0].individuals_count) || 0)
       groupAndSpeciesDefaultsResult.rows[0].generatedName = generatedName
-      res.json(groupAndSpeciesDefaultsResult.rows[0]).status(200)
+      res.status(200).json(groupAndSpeciesDefaultsResult.rows[0])
     }
   } else {
     const getMothersResult = await makeQuery(GET_MOTHER, req.params.individualId);
@@ -115,7 +117,7 @@ const getIndividualInfo = tryCatch(async function(req, res, next) {
     
     individualResult.rows[0].generatedName = generatedName
     individualResult.rows[0].parents = {mother: getMothersResult.rows[0], father: getFathersResult.rows[0] || null};
-    res.send(individualResult.rows[0]).status(200)
+    res.status(200).send(individualResult.rows[0])
   }
 })
 
@@ -132,15 +134,16 @@ const getGroupInfo = tryCatch(async function(req, res, next) {
 
   if (req.params.groupId === "undefined") {
     const speciesDefaultsResult = await makeQuery(GET_NEW_GROUP_DEFAULTS_SPECIES, req.params.speciesId)
-    res.send(speciesDefaultsResult.rows[0]).status(200)
+    res.status(200).send(speciesDefaultsResult.rows[0])
   } else {
     const groupResult = await makeQuery(GET_GROUP, req.params.groupId)
-    res.send(groupResult.rows).status(200)
+    res.status(200).send(groupResult.rows)
   }
 })
 
 
 
+//to be redone
 const getSpeciesMembersNested = tryCatch(async function(req, res, next) {
   const mother = req.query?.mother;
   const father = req.query?.father;
@@ -201,7 +204,7 @@ const getSpeciesMembersNested = tryCatch(async function(req, res, next) {
   } else {
     nestedNodes = await Promise.all(nestedNodes.map(recursivelyRetrieveNodes));
   }
-  res.send(nestedNodes).status(200);
+  res.status(200).send(nestedNodes);
 })
 
 
@@ -211,7 +214,7 @@ const getSpeciesMembers = tryCatch(async function(req, res, next) {
   const GET_INDIVIDUALS = `SELECT name, id, images FROM individual_plant WHERE species_id = $1 AND LOWER(name) LIKE LOWER($2) LIMIT 100`;
   const speciesId = Number(req.params.speciesId);
   const plants = await makeQuery(GET_INDIVIDUALS, speciesId, `%${query}%`);
-  res.send(plants.rows).status(200);
+  res.status(200).send(plants.rows);
 })
 
 
@@ -315,7 +318,7 @@ const getSpecificSpeciesGroups = tryCatch(async function(req, res, next) {
 
   const speciesResult = await makeQuery(GET_SPECIES, )
   const groupsResult = await makeQuery(GET_SPECIES_GROUPS, speciesResult.rows[0].id)
-  res.send(groupsResult.rows).status(200)
+  res.status(200).send(groupsResult.rows)
 })
 
 
@@ -336,7 +339,7 @@ const getSpecificSpeciesSpecificGroup = tryCatch(async function(req, res, next) 
   const speciesResult = await makeQuery(GET_SPECIES, )
   const groupResult = await makeQuery(GET_SPECIES_GROUP, speciesResult.rows[0].id, )
   const individualsResult = await makeQuery(GET_GROUP_INDIVIDUALS, groupResult.rows[0].id, )
-  res.send({group: groupResult.rows, individuals: individualsResult.rows}).status(200)
+  res.status(200).send({group: groupResult.rows, individuals: individualsResult.rows});
 })
 
 
@@ -379,7 +382,7 @@ const createSpecies = tryCatch(async function(req, res, next) {
       isJsonString(req.body.water_values) ? req.body.water_values : 
       JSON.stringify(req.body.water_values)
   )
-  res.send(addSpeciesResult.rowCount > 0).status(200)
+  res.status(200).send()
 })
 
 
@@ -403,7 +406,7 @@ const createSpeciesIndividual = tryCatch(async function(req, res, next) {
       parents.father?.id || null
     )
   }
- 
+
   const clean = DOMPurify.sanitize(req.body.descriptionHTML);
   const ADD_INDIVIDUAL = `INSERT INTO individual_plant (id, name, images, description_delta, description_html, light_values, substrate_values, water_values, group_id, species_id, is_clone, is_artificial_conditions, death_date)
                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`;
@@ -435,7 +438,7 @@ const createSpeciesIndividual = tryCatch(async function(req, res, next) {
   } 
   await makeQuery(ADD_PARENT_CHILD_PAIR, req.params.nextId, getParentPairIdResult?.rows[0]?.id || null) 
 
-  res.send(addIndividualResult.rowCount > 0).status(200)
+  res.status(200).send()
 })
 
 
@@ -445,7 +448,8 @@ const createSpeciesGroup = tryCatch(async function(req, res, next) {
                            VALUES ($1, $2, $3, $4)`;
 
   const addGroupResult = await makeQuery(ADD_GROUP, )
-  res.send(addGroupResult.rowCount > 0).status(200)
+  res.status(200).send();
+  
 })
 
 
@@ -463,7 +467,7 @@ const editSpecies = tryCatch(async function(req, res, next) {
                           water_values = COALESCE($7, water_values)
                         WHERE id = $8`;
 
-  let {name, descriptionDelta, descriptionHTML, substrate_values, light_values, water_values, parents, groupId, existing_images} = req.body;
+  let {name, descriptionDelta, descriptionHTML, substrate_values, light_values, water_values, existing_images} = req.body;
   const speciesId = req.params.speciesId;
   existing_images = JSON.parse(existing_images)
   const imageNameRegex = /image(\d+)\.jpeg/;
@@ -482,14 +486,19 @@ const editSpecies = tryCatch(async function(req, res, next) {
   const editGroupResult = await makeQuery(EDIT_SPECIES, 
     name, 
     JSON.stringify(images), 
-    descriptionDelta,
+    isJsonString(descriptionDelta) ? descriptionDelta : JSON.stringify(descriptionDelta),
     clean, 
     isJsonString(light_values) ? light_values : JSON.stringify(light_values),
     isJsonString(substrate_values) ? substrate_values : JSON.stringify(substrate_values),
     isJsonString(water_values) ? water_values : JSON.stringify(water_values),
     speciesId
   )
-  res.send(editGroupResult.rowCount > 0).status(200)
+
+  if (editGroupResult.rowCount > 0) {
+    res.status(200).send();
+  } else {
+    throw new AppError(404, "Item not found")
+  }
 })
 
 
@@ -571,7 +580,7 @@ const editSpeciesIndividual = tryCatch(async function(req, res, next) {
     isDead === "true" ? convertToPostgresTimestamp(Date.now()) : null,
     req.params.individualId
   );
-  res.send(editIndividualResult.rowCount > 0).status(200);
+  res.status(200).send();
 })
 
 
@@ -585,7 +594,7 @@ const editSpeciesGroup = tryCatch(async function(req, res, next) {
                       WHERE id = $4`;
 
   const editGroupResult = await makeQuery(EDIT_GROUP, )
-  res.send(editGroupResult.rowCount > 0).status(200)
+  res.status(200).send()
 })
 
 
@@ -596,10 +605,8 @@ const deleteSpecies = tryCatch(async function(req, res, next) {
                           WHERE id = $1`;
 
   const deleteSpeciesResult = await makeQuery(DELETE_SPECIES, req.params.speciesId)
-
   deleteFolderAndContents(req.body.speciesName)
-
-  res.send(deleteSpeciesResult.rowCount > 0).status(200)
+  res.status(200).send()
 })
 
 
@@ -610,7 +617,7 @@ const deleteSpeciesIndividual = tryCatch(async function(req, res, next) {
 
   const deleteIndividualResult = await makeQuery(DELETE_INDIVIDUAL, req.params.individualId)
   deleteFolderAndContents(req.body.speciesName, req.body.individualName)
-  res.send(deleteIndividualResult.rowCount > 0).status(200)
+  res.status(200).send();
 })
 
 
@@ -621,7 +628,7 @@ const deleteSpeciesGroup = tryCatch(async function(req, res, next) {
 
   const deleteGroupResult = await makeQuery(DELETE_GROUP, req.params.groupId);
   deleteFolderAndContents(req.body.speciesName, req.body.groupName)
-  res.send(deleteGroupResult.rowCount > 0).status(200);
+  res.status(200).send();
 })
 
 

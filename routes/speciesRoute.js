@@ -23,6 +23,7 @@ router.get("/:speciesId/groups", controllers.getSpecificSpeciesGroups)  //get gr
 router.get("/:speciesId/:groupId", controllers.getSpecificSpeciesSpecificGroup)  //get individuals of species and group
 
 
+
 router.post("/", getNextId.bind(this, "species"), speciesUpload.array("images", 5), deleteFolderImages, controllers.createSpecies) // create a new species
 
 router.post("/:speciesId/:groupId", getNextId.bind(this, "individual_plant"), individualUpload.array("images", 5), deleteFolderImages, controllers.createSpeciesIndividual) // create a new individual in ${speciesId}

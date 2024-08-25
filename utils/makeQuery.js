@@ -8,13 +8,12 @@ const logQuery = (statement, parameters) => {
 };
 
 const CONNECTION = {
-  connectionString: envConfig.DATABASE_URL
+  connectionString: envConfig.MODE === "test" ? envConfig.TEST_DATABASE_URL : envConfig.DATABASE_URL
 }
 
 module.exports = async function makeQuery(statement, ...parameters) {
   const client = new Client(CONNECTION);
   await client.connect();
-  logQuery(statement, parameters);
   let result = await client.query(statement, parameters);
   await client.end();
   return result
